@@ -22,8 +22,21 @@ def detectSkin(name='', checkOnly=False):
 
     return sclst
 
+def getInfluencesFromSel():
+    '''Get all influences from all selected skinned meshes'''
+    influences = []
+    for s in cmds.ls(sl=True):
+        sclst = mel.eval('findRelatedSkinCluster {};'.format(s))
+        influ = cmds.skinCluster(sclst, q=True, weightedInfluence=True)
+        for i in influ:
+            if i not in influences: influences.append(i)
+    return influences
+
 def copySkinWeight(source=None, destination=None, vtxID=False):
     selVtxID = []
+    if pm.objExists(source): source = pm.PyNode(source)
+    if pm.objExists(destination): destination = pm.PyNode(destination)
+
     if not source and not destination:
         sel = pm.selected()
         if len(sel) < 2: return MGlobal.displayInfo('Select source and target to copy skin weight.')

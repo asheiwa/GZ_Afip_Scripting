@@ -1,4 +1,5 @@
 from maya import cmds
+import pymel.core as pm
 
 def getParent(node, level=0):
     parent = cmds.listRelatives(node, parent=True)
@@ -18,6 +19,29 @@ def addOffset(transform, suffix='offset'):
     cmds.parent(transform, offset)
     if par:
         cmds.parent(offset, par)
+
+def getClosestTransform(tfm, target, data=False):
+    if   type(tfm) != pm.dt.Matrix and hasattr(tfm, 'wm'):
+        tfm = tfm.wm.get()
+    elif type(tfm) == list():
+        tfm = pm.dt.Matrix( (1,0,0), (0,1,0), (0,0,1), tfm[:3] )
+
+    targetMatrix = []
+    for t in target:
+        if   type(t) == pm.dt.Matrix: targetMatrix.append(t)
+        elif hasattr(t, 'wm'):        targetMatrix.append(t.wm.get())
+        else:                         targetMatrix.append(t)
+
+    distances = [ tfm.distanceTo(t) for t in targetMatrix ]
+    indexes   = dict()
+    for dist, tgt in zip(distances, target):
+        indexes[dist] = tgt
+
+    distances.sort()
+    result  = [ indexes[dist] for dist in distances ]
+
+    if data: return result
+    else:    return result[0]
 
 def createCenterLoc(size=1, cluster=True):
     sel = pm.ls(sl=True, fl=True)

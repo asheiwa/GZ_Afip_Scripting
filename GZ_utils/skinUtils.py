@@ -1,6 +1,7 @@
 import os
+from maya import mel
+from maya import cmds
 import pymel.core as pm
-from maya import cmds, mel
 from maya.OpenMaya import MGlobal
 
 def detectSkin(name='', checkOnly=False):
@@ -34,6 +35,9 @@ def getInfluencesFromSel():
     return influences
 
 def copySkinWeight(source=None, destination=None, vtxID=False):
+    sel = pm.selected()
+    if sel and len(sel) == 2: source, destination = sel
+
     selVtxID = []
     if pm.objExists(source): source = pm.PyNode(source)
     if pm.objExists(destination): destination = pm.PyNode(destination)
@@ -48,7 +52,6 @@ def copySkinWeight(source=None, destination=None, vtxID=False):
             src, dst = meshVertex[0].node(), sel[-1]
             if type(dst) != pm.nt.Transform :
                 return MGlobal.displayInfo('Vertices selected. Please select a mesh to copy skin weight.')
-
         else:
             src, dst = sel[0], sel[1]
 
@@ -106,7 +109,6 @@ def copySkinWeight(source=None, destination=None, vtxID=False):
         cmds.progressBar(gMainProgressBar, edit=True, endProgress=True)
 
         MGlobal.displayInfo('Copy skin weight from "{}" to "{}" per vertex ID done.'.format(src, dst))
-
 
 def saveSkin(checkName=False):
     meshes = [m for m in pm.ls(sl=True, type=['transform', 'mesh']) if m.getShape() and m.getShape().type() == 'mesh']
@@ -170,10 +172,9 @@ def saveSkin(checkName=False):
             cmds.progressBar(gMainProgressBar, edit=True, step=1)
         cmds.progressBar(gMainProgressBar, edit=True, endProgress=True)
 
-        print 'Skin weight of ' + meshName + ' has been saved successfully.'
+        print('Skin weight of ' + meshName + ' has been saved successfully.')
 
     MGlobal.displayInfo('Export skin done!')
-
 
 def loadSkin(checkName=False, path=None):
     meshes = [m for m in pm.ls(sl=True, type=['transform', 'mesh']) if m.getShape() and m.getShape().type() == 'mesh']

@@ -1,4 +1,5 @@
 from maya import cmds
+from maya import OpenMaya
 from ngSkinTools2 import  api
 from ngSkinTools2.api import init_layers, Layers
 
@@ -16,19 +17,23 @@ def initNgSkin(skincluster):
 
     return  layers
 
-def copySkin(source, target, vertexID=False):
-    # source, target = 'low', 'low1'
+def copySkin(source=None, target=None, vertexID=False):
+    sel = cmds.ls(sl=True)
+    if len(sel) == 2: source, target = sel
+    if not source or not target:
+        return OpenMaya.MGlobal.displayInfo('Please select skinned source mesh and then target mesh to copy the skin.')
 
     # get source skinCluster
     sclstSrc = api.target_info.get_related_skin_cluster(source)
-    influSrc = cmds.skinCluster(sclstSrc, q=True, weightedInfluence=True)
+    influSrc = cmds.skinCluster(sclstSrc, q=True, influence=True)
 
     # get target skinCluster
     sclstTgt = api.target_info.get_related_skin_cluster(target)
     if not sclstTgt:
         sclstTgt = cmds.skinCluster(influSrc, target, tsb=True)[0]
         sclstTgt = cmds.rename(sclstTgt, 'sclst_'+target)
-    influTgt = cmds.skinCluster(sclstTgt, q=True, weightedInfluence=True)
+    influTgt = cmds.skinCluster(sclstTgt, q=True, influence=True)
+    print('influTgt :', influTgt)
 
     # make sure all source influences added to skinCluster target
     notAdded = [ influ for influ in influSrc if influ not in influTgt ]
@@ -53,3 +58,5 @@ def copySkin(source, target, vertexID=False):
     if not isSourceHasNg:
         cmds.delete(getNgSkinNode(sclstSrc))
     cmds.select(target)
+
+    OpenMaya.MGlobal.displayInfo('Skin copied.')

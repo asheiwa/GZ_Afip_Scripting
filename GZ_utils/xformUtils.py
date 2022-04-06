@@ -1,5 +1,42 @@
-from maya import cmds
+from maya import cmds, mel
 import pymel.core as pm
+
+
+def setToDefaultValue(selected=[], channelBox=True, transformOnly=False):
+    sel = selected or pm.selected()
+
+    if not sel: return MGlobal.displayInfo('Select nodes to set to the default value.')
+
+    for s in sel:
+        if channelBox:
+            channelBox = mel.eval(
+                'global string $gChannelBoxName; $temp=$gChannelBoxName;')  # fetch maya's main channelbox
+            attr = pm.channelBox(channelBox, q=True, sma=True)
+            if attr:
+                attr = [s.attr(a) for a in attr if s.hasAttr(a)]
+            else:
+                attr = s.listAttr(k=True, se=True, l=False)
+        else:
+            attr = s.listAttr(k=True, se=True, l=False)
+
+        if not transformOnly:
+            for a in attr:
+                # if a.isKeyable() and len(a.connections(d=False, s=True)) == 0 and not a.isLocked():
+                if a.isKeyable():
+                    try:
+                        if a.isDynamic():
+                            a.set(pm.addAttr(a, q=True, dv=True))
+                        elif a.shortName() in ['tx', 'ty', 'tz', 'rx', 'ry', 'rz']:
+                            a.set(0)
+                        elif a.shortName() in ['sx', 'sy', 'sz', 'v']:
+                            a.set(1)
+                    except:
+                        pass
+        else:
+            pm.move(s, (0,0,0), os=True)
+            pm.rotate(s, (0,0,0), os=True)
+            pm.scale(s, (1,1,1))
+            # if s.v.isKeyable() and len(s.v.connections()) == 0 and not s.v.isLocked(): s.v.set(1)
 
 def getParent(node, level=0):
     parent = cmds.listRelatives(node, parent=True)
@@ -110,5 +147,56 @@ def createCenterPos(pos):
     return finalPos
 
 
+def rivetFollicle(mesh, tfm, snap=False, constraint=False, parent=False):
+    if pm.objExists(mesh): mesh = pm.PyNode(mesh)
+    if pm.objExists(tfm): tfm = pm.PyNode(tfm)
+    
+    name = tfm.name()
+    
+    fcl = pm.createNode('follicle')
+    fcl.getParent().rename(name+'_follicle')
+    parU, parV = 0.5, 0.5
+    
+    # Connect Objects
+    if type(mesh.getShape()) == pm.nt.NurbsSurface:
+        mesh.getShape().local.connect( fcl.inputSurface )
+        cpom  = pm.createNode('closestPointOnSurface', n=name+'_closestPointOnSurface')
+        mesh.getShape().connectAttr('worldSpace[0]', cpom.inputSurface, f=True )
+        
+    elif type(mesh.getShape()) == pm.nt.Mesh:
+        mesh.getShape().outMesh.connect( fcl.inputMesh )
+        cpom  = pm.createNode('closestPointOnMesh', n=name+'_closestPointOnSurface')
+        mesh.getShape().connectAttr('outMesh', cpom.inMesh, f=True )
+        
+        
+    pointM = pm.createNode('pointMatrixMult', n=name+'_pointMatrixMult')
+    compM  = pm.createNode('decomposeMatrix', n=name+'_decomposeMatrix')
+    
+    mesh.getShape().connectAttr('worldInverseMatrix[0]', pointM.inMatrix, f=True )
+    tfm.connectAttr('worldMatrix[0]', compM.inputMatrix, f=True )
+    compM.connectAttr('outputTranslate', pointM.inPoint, f=True )
+    pointM.connectAttr('output', cpom.inPosition, f=True)
+    
+    parU = cpom.parameterU.get()
+    parV = cpom.parameterV.get()
+    
+    mesh.getShape().connectAttr('worldMatrix[0]', fcl.inputWorldMatrix, f=True )
+    fcl.outRotate.connect( fcl.getParent().rotate )
+    fcl.outTranslate.connect( fcl.getParent().translate )
+    
+    fcl.parameterU.set( parU )    
+    fcl.parameterV.set( parV )    
+    
+    # snap
+    if snap == True:
+        # pm.delete( pm.parentConstraint( fcl.getParent(), tfm, mo=False) )
+        tfm.setMatrix( fcl.getParent().wm.get() )
+        
+    # constraint
+    if constraint:
+        pm.parentConstraint( fcl.getParent(), tfm, mo=not snap)
+    else:
+        if parent: tfm.setParent( fcl.getParent() )
 
+    return flc
 

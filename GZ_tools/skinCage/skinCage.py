@@ -11,7 +11,11 @@ class SkinCage:
               'lt_leg' : ['lt_leg_1_guide', 'lt_leg_2_guide', 'lt_leg_3_guide'],
               'rt_leg' : ['rt_leg_1_guide', 'rt_leg_2_guide', 'rt_leg_3_guide'],
               'lt_foot': ['lt_foot_1_guide', 'lt_foot_2_guide', 'lt_foot_3_guide'],
-              'rt_foot': ['rt_foot_1_guide', 'rt_foot_2_guide', 'rt_foot_3_guide']
+              'rt_foot': ['rt_foot_1_guide', 'rt_foot_2_guide', 'rt_foot_3_guide'],
+              'lt_hand': ['lt_hand_1_guide', 'lt_hand_2_guide'],
+              'rt_hand': ['rt_hand_1_guide', 'rt_hand_2_guide'],
+              'lt_fingers': [ ['lt_finger{0}_{1}_guide'.format(i, x+1) for x in range(3)] for i in range(5)],
+              'rt_fingers': [ ['rt_finger{0}_{1}_guide'.format(i, x+1) for x in range(3)] for i in range(5)],
               }
 
     def __init__(self):
@@ -21,19 +25,19 @@ class SkinCage:
         chest_cage, chest_crv = self.__createChestCage()
         head_cage, head_crv = self.__createHeadCage()
         neck_cage = self.__createNeckCage(chest_crv, head_crv)
-        # spine_cage = self.__createSpineCage()
-        # arm_cage = self.__createArmCage()
-        # leg_cage = self.__createLegCage()
-        # hip_cage = self.__createHipCage()
-        #
-        allCages = [chest_cage, head_cage, neck_cage ]
-        # allCages = [chest_cage, head_cage, neck_cage, spine_cage, arm_cage, leg_cage, hip_cage]
+        spine_cage = self.__createSpineCage()
+        arm_cage = self.__createArmCage()
+        hip_cage = self.__createHipCage()
+        leg_cage = self.__createLegCage()
+        foot_cage = self.__createFoot()
+        hands_cage = self.__createHands()
+
+        allCages = [chest_cage, head_cage, neck_cage, spine_cage, arm_cage, hip_cage, leg_cage, foot_cage, hands_cage]
 
         self.humanCage = pm.polyUnite(allCages, ch=False, n='Human_Cage')[0]
-        pm.polyMergeVertex(self.humanCage, d=0.1, am=1, ch=False)
+        pm.polyMergeVertex(self.humanCage, d=0.01, am=1, ch=False)
 
         pm.select(self.humanCage)
-        mel.eval('expandPolyGroupSelection;polySetToFaceNormal;')
         cmds.polySoftEdge(a=180, ch=0)
         cmds.select(cl=True)
 
@@ -156,6 +160,7 @@ class SkinCage:
 
         pm.delete(loftFront, loftBack, railTop, railLow)
         return headCage, border_crv
+        # return None, None
 
     def __createSpineCage(self):
         spine_guide = [pm.PyNode(n) for n in self.GUIDES['spine']]
@@ -165,49 +170,219 @@ class SkinCage:
 
     def __createHipCage(self):
         spine_guide = pm.PyNode(self.GUIDES['spine'][0])
-        leg_guide = pm.PyNode(self.GUIDES['leg'][0])
+        lt_leg_guide = pm.PyNode(self.GUIDES['lt_leg'][0])
+        rt_leg_guide = pm.PyNode(self.GUIDES['rt_leg'][0])
 
-        spine_pos = [cv.getPosition(space='world') for cv in spine_guide.getShape().cv]
-        spine_crv = pm.curve(p=spine_pos[0:9], d=1)
+        spine_crv = pm.duplicate(spine_guide, rr=True)[0]
+        spine_crv.setParent(world=True)
 
-        leg_pos = [cv.getPosition(space='world') for cv in leg_guide.getShape().cv]
-        start, end = leg_pos[0] * (0, 1, 1), leg_pos[-2] * (0, 1, 1)
-        hip_pos = [start] + leg_pos[0:7] + [end]
-        leg_crv = pm.curve(p=hip_pos, d=1)
+        lt_leg_pos = [cv.getPosition(space='world') for cv in lt_leg_guide.getShape().cv]
+        rt_leg_pos = [cv.getPosition(space='world') for cv in rt_leg_guide.getShape().cv]
+        lt_hip, rt_hip = lt_leg_pos[:-1], rt_leg_pos[:-1]
+        rt_hip.reverse()
+        hip_pos = [lt_hip[0]*(0,1,1)] + lt_hip + [rt_hip[0]*(0,1,1)] + rt_hip
+        hip_crv = pm.curve(p=hip_pos, d=1)
+        pm.closeCurve(hip_crv, ch=False, ps=1, rpo=1, bb=0.5, bki=0, p=0.1)
 
-        loftCurves = [spine_crv, leg_crv]
-        hipCage = SkinCage.createPolygon(loftCurves, sub_edges=3)
+        loftCurves = [spine_crv, hip_crv]
+        upperCage = SkinCage.createPolygon(loftCurves, sub_edges=3)
 
-        lowerHip_pos = [leg_pos[x] for x in (0,-1,-2)]
-        lowerHipCenter_pos = [p * (0,1,1) for p in lowerHip_pos]
-        crv1 = pm.curve(p=lowerHip_pos, d=1)
-        crv2 = pm.curve(p=lowerHipCenter_pos, d=1)
-        lower_cage = SkinCage.createPolygon([crv1, crv2], sub_edges=1)
+        lt_lowerHip_pos = [lt_leg_pos[x] for x in (0,-1,-2)]
+        rt_lowerHip_pos = [rt_leg_pos[x] for x in (0,-1,-2)]
+        lowerHipCenter_pos = [ hip_pos[0], ((lt_lowerHip_pos[1] + rt_lowerHip_pos[1]) * 0.5 ) * (0,1,1), hip_pos[8] ]
+        lt_crv = pm.curve(p=lt_lowerHip_pos, d=1)
+        rt_crv = pm.curve(p=rt_lowerHip_pos, d=1)
+        crv = pm.curve(p=lowerHipCenter_pos, d=1)
+        lowerCage = SkinCage.createPolygon([lt_crv, crv, rt_crv], sub_edges=1)
 
-        hipCage = pm.polyUnite([hipCage, lower_cage], ch=False)[0]
+        hipCage = pm.polyUnite([upperCage, lowerCage], ch=False)[0]
         pm.polyMergeVertex(hipCage, d=0.1, am=1, ch=False)
 
         cmds.polyNormal(hipCage.name(), normalMode=0, userNormalMode=0, ch=0)
 
-        pm.delete(loftCurves, crv1, crv2)
+        pm.delete(loftCurves, lt_crv, rt_crv, crv)
 
         return hipCage
 
     def __createArmCage(self):
-        arm_guide = [pm.PyNode(n) for n in self.GUIDES['arm']]
-        armCage = SkinCage.createPolygon(arm_guide, sub_edges=4)
+        lt_arm_guide = [pm.PyNode(n) for n in self.GUIDES['lt_arm']]
+        rt_arm_guide = [pm.PyNode(n) for n in self.GUIDES['rt_arm']]
+        lt_armCage = SkinCage.createPolygon(lt_arm_guide, sub_edges=4)
+        rt_armCage = SkinCage.createPolygon(rt_arm_guide, sub_edges=4)
 
-        cmds.polyNormal( armCage.name(), normalMode=0, userNormalMode=0, ch=0)
+        cmds.polyNormal( lt_armCage.name(), normalMode=0, userNormalMode=0, ch=0)
+
+        for arm in [lt_armCage, rt_armCage]:
+            SkinCage.insertEdgesLoop(arm.name() + '.e[37]', weight=0.9)
+            SkinCage.insertEdgesLoop(arm.name() + '.e[88]', weight=0.1)
+            SkinCage.insertEdgesLoop(arm.name() + '.e[101]', weight=0.9)
+            SkinCage.pDeleteEdgesLoop(arm.name() + '.e[46]')
+
+        armCage = pm.polyUnite([lt_armCage, rt_armCage], ch=False)[0]
 
         return armCage
 
     def __createLegCage(self):
-        leg_guide = [pm.PyNode(n) for n in self.GUIDES['leg']]
-        legCage = SkinCage.createPolygon(leg_guide, sub_edges=4)
+        lt_leg_guide = [pm.PyNode(n) for n in self.GUIDES['lt_leg']]
+        rt_leg_guide = [pm.PyNode(n) for n in self.GUIDES['rt_leg']]
 
-        cmds.polyNormal(legCage.name(), normalMode=0, userNormalMode=0, ch=0)
+        lt_legCage = SkinCage.createPolygon(lt_leg_guide, sub_edges=4)
+        rt_legCage = SkinCage.createPolygon(rt_leg_guide, sub_edges=4)
+
+        cmds.polyNormal(lt_legCage.name(), normalMode=0, userNormalMode=0, ch=0)
+
+        for leg in [lt_legCage, rt_legCage]:
+            SkinCage.insertEdgesLoop(leg.name() + '.e[4]', weight=0.9)
+            SkinCage.insertEdgesLoop(leg.name() + '.e[89]', weight=0.1)
+            SkinCage.insertEdgesLoop(leg.name() + '.e[99]', weight=0.9)
+            SkinCage.pDeleteEdgesLoop(leg.name() + '.e[34]')
+
+        legCage = pm.polyUnite([lt_legCage, rt_legCage], ch=False)[0]
 
         return legCage
+
+    def __createFoot(self):
+        footCages = []
+        for side in 'lr':
+            leg_guide = pm.PyNode(self.GUIDES[side+'t_leg'][-1])
+            foot_guide = [ pm.PyNode(n) for n in self.GUIDES[side+'t_foot'] ]
+
+            leg_pos = [ cv.getPosition(space='world') for cv in leg_guide.getShape().cv ]
+            heel_pos = [ cv.getPosition(space='world') for cv in foot_guide[0].getShape().cv ]
+
+            # heel cage
+            leg_crv = pm.curve(p=leg_pos[2:] + [leg_pos[0]], d=1)
+            heel_crv = pm.curve(p=heel_pos[2:] + [heel_pos[0]], d=1)
+            heelCage = SkinCage.createPolygon([leg_crv, heel_crv], sub_edges=1)
+            if side == 'l':
+                cmds.polyNormal(heelCage.name(), normalMode=0, userNormalMode=0, ch=0)
+            footCages.append(heelCage)
+            pm.delete(leg_crv, heel_crv)
+
+            # heel cap
+            heelCap = SkinCage.createPolygonCap(foot_guide[0])
+            footCages.append(heelCap)
+            if side == 'l':
+                cmds.polyNormal(heelCap, normalMode=0, userNormalMode=0, ch=0)
+
+            # foot
+            pos1 = leg_pos[:3]
+            pos2 = heel_pos[:3]
+            pos2.reverse()
+            crv = pm.curve(p = pos1 + pos2, d=1)
+            pm.closeCurve(crv, ch=False, ps=1, rpo=1, bb=0.5, bki=0, p=0.1)
+            footCage = SkinCage.createPolygon([crv] + foot_guide[1:], sub_edges=1)
+            footCages.append(footCage)
+            pm.delete(crv)
+            if side == 'l':
+                cmds.polyNormal(footCage.name(), normalMode=0, userNormalMode=0, ch=0)
+
+            SkinCage.insertEdgesLoop(footCage.name() + '.e[16]', weight=0.9)
+            SkinCage.insertEdgesLoop(footCage.name() + '.e[6]', weight=0.1)
+            SkinCage.pDeleteEdgesLoop(footCage.name() + '.e[7]')
+
+            # toe
+            pos = [ cv.getPosition(space='world') for cv in foot_guide[-1].cv ]
+            pos1 = pos[:3]
+            pos2 = pos[3:]
+            pos2.reverse()
+            crvs = [ pm.curve(p=p, d=1) for p in (pos1, pos2) ]
+            toeCage = SkinCage.createPolygon(crvs, sub_edges=1)
+            footCages.append(toeCage)
+            pm.delete(crvs)
+            if side == 'l':
+                cmds.polyNormal(toeCage.name(), normalMode=0, userNormalMode=0, ch=0)
+
+        footCages = pm.polyUnite(footCages, ch=False)[0]
+        pm.polyMergeVertex(footCages, d=0.1, am=1, ch=False)
+
+        return footCages
+
+    def __createHands(self):
+        allCages = []
+        for side in 'lr':
+            arm_guide = pm.PyNode(self.GUIDES[side + 't_arm'][-1])
+            hand_guide = [pm.PyNode(n) for n in self.GUIDES[side + 't_hand']]
+            fingers_guide = [[pm.PyNode(f) for f in fng] for fng in self.GUIDES[side + 't_fingers']]
+
+            # create palm cage
+            palmCage = SkinCage.createPolygon([arm_guide] + hand_guide, sub_edges=1)
+            if side == 'l':
+                cmds.polyNormal(palmCage.name(), normalMode=0, userNormalMode=0, ch=0)
+            SkinCage.pPolySplit(palmCage.name(), edges=[(23, 0.5), (24, 0.5)])
+            SkinCage.pPolySplit(palmCage.name(), edges=[(3, 0.5), (1, 0.5)])
+            SkinCage.pPolySplit(palmCage.name(), edges=[(7, 0.5), (5, 0.5)])
+            SkinCage.pPolySplit(palmCage.name(), edges=[(38, 0.5), (39, 0.5)])
+            pm.delete([palmCage.f[x] for x in (3, 4)])
+            allCages.append(palmCage)
+
+            # create finger base
+            hand_guide = [pm.PyNode(n) for n in self.GUIDES[side + 't_hand']]
+            basePos = [ cv.getPosition(space='world') for cv in hand_guide[-1].getShape().cv ]
+            basePos.insert(3, SkinCage.createPosBetween(basePos[2], basePos[3]))
+            basePos.insert(5, SkinCage.createPosBetween(basePos[4], basePos[5]))
+            basePos.insert(9, SkinCage.createPosBetween(basePos[8], basePos[9]))
+            basePos.append(SkinCage.createPosBetween(basePos[0], basePos[-1]))
+            midPos = [ SkinCage.createPosBetween(basePos[x], basePos[y]) for x, y in zip((3,4,5),(11,10,9))]
+
+            # create fingers cage
+            finger1Pos = basePos[0:4] + [midPos[0]] + [basePos[-1]]
+            finger2Pos = [basePos[-1]] + [midPos[0]] + basePos[3:5] + [midPos[1]] + [basePos[10]]
+            finger3Pos = [basePos[10]] + [midPos[1]] + basePos[4:6] + [midPos[2]] + [basePos[9]]
+            finger4Pos = [basePos[9]] + [midPos[2]] + basePos[5:9]
+            fingerBase = []
+            for pos in [finger1Pos, finger2Pos, finger3Pos, finger4Pos]:
+                crv = pm.curve(p=pos, d=1)
+                pm.closeCurve(crv, ch=False, ps=1, rpo=1, bb=0.5, bki=0, p=0.1)
+                fingerBase.append(crv)
+            fingerCages = []
+            for x, fingers in enumerate(fingers_guide[1:]):
+                curves = [fingerBase[x]] + fingers
+                for crv in curves: pm.rebuildCurve(crv, ch=0, rpo=1, rt=0, end=1, kr=0, kcp=1, kep=1, kt=0, s=4, d=1, tol=0.0001)
+                fingerCage = SkinCage.createPolygon(curves, sub_edges=1)
+                fingerCages.append(fingerCage)
+                SkinCage.pPolyBevel(fingerCage.name()+'.e[10]', offset=0.05, loop=True)
+                SkinCage.pPolyBevel(fingerCage.name()+'.e[7]', offset=0.05, loop=True)
+                SkinCage.insertEdgesLoop(fingerCage.name()+'.e[31]', weight=0.1)
+                if side == 'l':
+                    cmds.polyNormal(fingerCage.name(), normalMode=0, userNormalMode=0, ch=0)
+            pm.delete(fingerBase)
+            allCages += fingerCages
+
+            # finger0 cage
+            pos1 = [ cv.getPosition(space='world') for cv in arm_guide.getShape().cv ][0:3]
+            pos2 = [ cv.getPosition(space='world') for cv in hand_guide[0].getShape().cv ][0:3]
+            pos2.reverse()
+            finger0base = pm.curve(p=pos1+pos2, d=1)
+            pm.closeCurve(finger0base, ch=False, ps=1, rpo=1, bb=0.5, bki=0, p=0.1)
+            finger0Cage = SkinCage.createPolygon([finger0base] + fingers_guide[0], sub_edges=1)
+            SkinCage.pPolyBevel(finger0Cage.name() + '.e[10]', offset=0.05, loop=True)
+            SkinCage.pPolyBevel(finger0Cage.name() + '.e[7]', offset=0.05, loop=True)
+            # SkinCage.insertEdgesLoop(finger0Cage.name() + '.e[31]', weight=0.5)
+            if side == 'l':
+                cmds.polyNormal(finger0Cage.name(), normalMode=0, userNormalMode=0, ch=0)
+            pm.delete(finger0base)
+            allCages.append(finger0Cage)
+
+            # create finger cap
+            fingerCaps = []
+            for fingers in fingers_guide:
+                capCrv = fingers[-1]
+                p1 = [ cv.getPosition(space='world') for cv in capCrv.getShape().cv ][0:3]
+                p2 = [ cv.getPosition(space='world') for cv in capCrv.getShape().cv ][3:]
+                p2.reverse()
+                crv = [ pm.curve(p=p, d=1) for p in (p1,p2)]
+                cap = SkinCage.createPolygon(crv, sub_edges=1)
+                fingerCaps.append(cap)
+                if side == 'l':
+                    cmds.polyNormal(cap.name(), normalMode=0, userNormalMode=0, ch=0)
+                pm.delete(crv)
+            allCages += fingerCaps
+
+        handsCage = pm.polyUnite(allCages, ch=False, n='Hands_Cage')[0]
+        pm.polyMergeVertex(handsCage, d=0.01, am=1, ch=False)
+
+        return handsCage
 
     def __nurbsToPolygons_settings(self):
         cmds.nurbsToPolygonsPref(chordHeightRatio = 0.1,
@@ -233,6 +408,22 @@ class SkinCage:
     def createPolygon(curves, sub_edges=1):
         cmds.nurbsToPolygonsPref(vNumber=sub_edges)
         return pm.loft( curves, ch=False, rn=True, ar=False, r=False, d=1, rsn=True, polygon=1 )[0]
+
+    @staticmethod
+    def createPolygonCap(curve):
+        curve = pm.PyNode(curve)
+        cvs = curve.cv
+        div = len(cvs) / 4
+        pos1 = [ cv.getPosition(space='world') for cv in cvs[0:div] ]
+        pos2 = [ cv.getPosition(space='world') for cv in cvs[div:(div*2)] ]
+        pos3 = [ cv.getPosition(space='world') for cv in cvs[(div*2):(div*3)] ]
+        pos4 = [ cv.getPosition(space='world') for cv in cvs[(div*3):] ] + [pos1[0]]
+        birailCurves = [pm.curve(p=pos, d=1) for pos in [pos1, pos3, pos2, pos4]]
+
+        cap = SkinCage.pBirail(birailCurves, 1, 1)
+        pm.delete(birailCurves)
+
+        return cap
 
     @staticmethod
     def pBirail(curves, uNumber=1, vNumber=1):
@@ -298,6 +489,18 @@ class SkinCage:
                            adjustEdgeFlow=1)
 
     @staticmethod
+    def pPolySplit(mesh, edges=[]):
+        # edges ex: ([1618, 0], [1619, 0.5])
+        cmds.polySplit(mesh, ch=False, s=1, sma=0, ief=0, insertpoint=edges)
+
+    @staticmethod
+    def pPolyBevel(edge, offset=0.2, loop=True, segments=1):
+        cmds.select(edge)
+        if loop:
+            cmds.SelectEdgeLoopSp()
+        cmds.polyBevel(offset=offset, segments=segments, ch=False)
+
+    @staticmethod
     def pDeleteHalf(mesh, edge=0, face=0):
         if hasattr(mesh, 'name'): mesh = mesh.name()
         edge = mesh+'.e[{0}]'.format(edge)
@@ -310,6 +513,12 @@ class SkinCage:
         cmds.ConvertSelectionToShell()
         cmds.delete()
         cmds.DeleteAllHistory()
+
+    @staticmethod
+    def pDeleteEdgesLoop(edge):
+        cmds.select(edge)
+        cmds.SelectEdgeLoopSp()
+        cmds.polyDelEdge(cv=True, ch=False)
 
     @staticmethod
     def pMirror(mesh):
@@ -390,8 +599,48 @@ class SkinCage:
         cmds.select("Human_Cage.e[443]")
         mel.eval('activateTopoSymmetry("Human_Cage.e[443]", {"Human_Cage.e[422]"}, {"Human_Cage"}, "edge", "dR_symmetrize", 1);')
 
-if __name__ == '__main__':
+    @staticmethod
+    def createPosBetween(posStart=None, posEnd=None, ratio=0.5):
+        pos1 = posStart
+        pos2 = posEnd
+        if hasattr(pos1, 'getTranslation'):
+            pos1 = pos1.getTranslation(space='world')
+        elif hasattr(pos1, 'getPosition'):
+            pos1 = pos1.getPosition(space='world')
+        else:
+            pos1 = pm.dt.Point(pos1)
+
+        if hasattr(pos2, 'getTranslation'):
+            pos2 = pos2.getTranslation(space='world')
+        elif hasattr(pos2, 'getPosition'):
+            pos2 = pos2.getPosition(space='world')
+        else:
+            pos2 = pm.dt.Point(pos2)
+
+        grp = pm.group(em=True)
+        loc = pm.spaceLocator()
+        loc.setParent(grp)
+
+        vec = pos2 - pos1
+        length = vec.length()
+        vec.normalize()
+
+        position = vec * (length * ratio)
+
+        loc.setTranslation(position, space='world')
+        grp.setTranslation(pos1)
+
+        positionResult = loc.getTranslation(space='world')
+        pm.delete(grp)
+
+        return positionResult
+
+def run():
     if cmds.objExists('Human_Cage'):
         cmds.delete('Human_Cage')
     scg = SkinCage()
     scg.createHumanCage()
+    # scg.createPolygonCap('lt_foot_1_guide')
+
+if __name__ == '__main__':
+    run()

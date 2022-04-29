@@ -57,6 +57,8 @@ def addOffset(transform, suffix='offset'):
     if par:
         cmds.parent(offset, par)
 
+    return offset
+
 def getClosestTransform(tfm, target, data=False):
     if   type(tfm) != pm.dt.Matrix and hasattr(tfm, 'wm'):
         tfm = tfm.wm.get()
@@ -87,7 +89,8 @@ def createCenterLoc(size=1, cluster=True):
     if cluster:
         verts = list()
         for n in sel:
-            if type(n) == pm.general.MeshVertex or type(n) == pm.general.NurbsCurveCV:
+            if type(n) == pm.general.MeshVertex or type(n) == pm.general.NurbsCurveCV or \
+                    type(n) == pm.general.NurbsSurfaceCV:
                 verts.append(n)
             elif type(n) == pm.general.MeshEdge:
                 for v in n.connectedVertices(): verts.append(v)
@@ -111,11 +114,13 @@ def createCenterLoc(size=1, cluster=True):
         for n in sel:
             if type(n) == pm.nt.Transform:
                 pos.append(n.getTranslation(space='world'))
-            elif type(n) == pm.general.MeshVertex or type(n) == pm.general.NurbsCurveCV:
+            elif type(n) == pm.general.MeshVertex or type(n) == pm.general.NurbsCurveCV or \
+                    type(n) == pm.general.NurbsSurfaceCV:
                 pos.append(n.getPosition(space='world'))
             elif type(n) == pm.general.MeshEdge:
                 for v in n.connectedVertices(): pos.append(v.getPosition(space='world'))
 
+        print pos
         if pos:
             posX, posY, posZ = [p.x for p in pos], [p.y for p in pos], [p.z for p in pos]
             x = float(sum(posX) / len(pos))
@@ -199,4 +204,11 @@ def rivetFollicle(mesh, tfm, snap=False, constraint=False, parent=False):
         if parent: tfm.setParent( fcl.getParent() )
 
     return flc
+
+def mirrorScaleX(transforms=[]):
+    grp = pm.group(em=True)
+    pm.parent( transforms, grp )
+    grp.sx.set(-1)
+    pm.parent( transforms, world=True )
+    pm.delete( grp )
 

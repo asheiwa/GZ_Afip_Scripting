@@ -2,47 +2,129 @@ import pymel.core as pm
 from maya import cmds, mel
 
 class SkinCage:
-    GUIDES = {'spine'  : ['spine_1_guide', 'spine_2_guide', 'spine_3_guide'],
+    # Define default guides
+    GUIDES = {'spines'  : ['spine_1_guide', 'spine_2_guide', 'spine_3_guide'],
               'chest'  : ['chest_1_guide'],
               'neck'   : ['neck_1_guide', 'neck_2_guide', 'neck_3_guide'],
               'head'   : ['head_1_guide', 'head_2_guide', 'head_3_guide'],
               'lt_arm' : ['lt_arm_1_guide', 'lt_arm_2_guide', 'lt_arm_3_guide'],
-              'rt_arm' : ['rt_arm_1_guide', 'rt_arm_2_guide', 'rt_arm_3_guide'],
               'lt_leg' : ['lt_leg_1_guide', 'lt_leg_2_guide', 'lt_leg_3_guide'],
-              'rt_leg' : ['rt_leg_1_guide', 'rt_leg_2_guide', 'rt_leg_3_guide'],
               'lt_foot': ['lt_foot_1_guide', 'lt_foot_2_guide', 'lt_foot_3_guide'],
-              'rt_foot': ['rt_foot_1_guide', 'rt_foot_2_guide', 'rt_foot_3_guide'],
               'lt_hand': ['lt_hand_1_guide', 'lt_hand_2_guide'],
-              'rt_hand': ['rt_hand_1_guide', 'rt_hand_2_guide'],
               'lt_fingers': [ ['lt_finger{0}_{1}_guide'.format(i, x+1) for x in range(3)] for i in range(5)],
-              'rt_fingers': [ ['rt_finger{0}_{1}_guide'.format(i, x+1) for x in range(3)] for i in range(5)],
+              }
+    for k, i in GUIDES.items():
+        if 'lt_' in k:
+            if k == 'lt_fingers':
+                rt_fingers = [ [ fng.replace('lt_', 'rt_') for fng in finger ] for finger in GUIDES[k] ]
+                GUIDES['rt_fingers'] = rt_fingers
+            else:
+                GUIDES[k.replace('lt_', 'rt_')] = [ jnt.replace('lt_', 'rt_') for jnt in GUIDES[k] ]
+
+    # Define default joints
+    JOINTS = {'spines' : ['hip_JNT', 'spine_01_JNT', 'spine_02_JNT'],
+              'chest' : ['chest_JNT'],
+              'neck' : ['neck_01_JNT', 'neck_02_JNT'],
+              'head' : ['head_JNT'],
+              'lt_leg' : ['lt_legUpper_JNT', 'lt_legLower_JNT', 'lt_footAnkle_JNT'],
+              'lt_arm' : ['lt_armUpper_JNT', 'lt_armLower_JNT', 'lt_wrist_JNT'],
+              'lt_foot' : ['lt_footToe_JNT', 'lt_footToe_endJNT'],
+              'lt_fingers': [['lt_fingerThumb_0{0}_JNT'.format(x) for x in (1,2,3)] + ['lt_fingerThumb_endJNT'],
+                             ['lt_fingerIndex_0{0}_JNT'.format(x) for x in (1,2,3)] + ['lt_fingerIndex_endJNT'],
+                             ['lt_fingerMiddle_0{0}_JNT'.format(x) for x in (1,2,3)] + ['lt_fingerMiddle_endJNT'],
+                             ['lt_fingerRing_0{0}_JNT'.format(x) for x in (1,2,3)] + ['lt_fingerRing_endJNT'],
+                             ['lt_fingerPinky_0{0}_JNT'.format(x) for x in (1,2,3)] + ['lt_fingerPinky_endJNT'],
+                             ],
               }
 
     def __init__(self):
+        self.jointsMapping = None
+
+        self.setJointsMapping(data=self.JOINTS)
         self.__nurbsToPolygons_settings()
 
+    def setJointsMapping(self, data):
+        for k, i in data.items():
+            if 'lt_' in k:
+                if k == 'lt_fingers':
+                    rt_fingers = [[fng.replace('lt_', 'rt_') for fng in finger] for finger in data[k]]
+                    data['rt_fingers'] = rt_fingers
+                else:
+                    data[k.replace('lt_', 'rt_')] = [jnt.replace('lt_', 'rt_') for jnt in data[k]]
+        self.jointsMapping = data
+
+    def generateGuides(self):
+        # import template guides
+
+        # fit guides
+        self.__fitGuides()
+
+    def mirrorGuide(self):
+        for k in self.GUIDES.keys():
+            if not 'rt_' in k:
+                for guide in self.GUIDES[k]:
+                    self.cCurveMirror(guide)
+
     def createHumanCage(self):
-        chest_cage, chest_crv = self.__createChestCage()
-        head_cage, head_crv = self.__createHeadCage()
-        neck_cage = self.__createNeckCage(chest_crv, head_crv)
-        spine_cage = self.__createSpineCage()
-        arm_cage = self.__createArmCage()
-        hip_cage = self.__createHipCage()
-        leg_cage = self.__createLegCage()
-        foot_cage = self.__createFoot()
+        # chest_cage, chest_crv = self.__createChestCage()
+        # head_cage, head_crv = self.__createHeadCage()
+        # neck_cage = self.__createNeckCage(chest_crv, head_crv)
+        # spine_cage = self.__createSpineCage()
+        # arm_cage = self.__createArmCage()
+        # hip_cage = self.__createHipCage()
+        # leg_cage = self.__createLegCage()
+        # foot_cage = self.__createFoot()
         hands_cage = self.__createHands()
 
-        allCages = [chest_cage, head_cage, neck_cage, spine_cage, arm_cage, hip_cage, leg_cage, foot_cage, hands_cage]
+        # allCages = [chest_cage, head_cage, neck_cage, spine_cage, arm_cage, hip_cage, leg_cage, foot_cage, hands_cage]
+        #
+        # self.humanCage = pm.polyUnite(allCages, ch=False, n='Human_Cage')[0]
+        # pm.polyMergeVertex(self.humanCage, d=0.01, am=1, ch=False)
+        #
+        # pm.select(self.humanCage)
+        # cmds.polySoftEdge(a=180, ch=0)
+        # cmds.select(cl=True)
 
-        self.humanCage = pm.polyUnite(allCages, ch=False, n='Human_Cage')[0]
-        pm.polyMergeVertex(self.humanCage, d=0.01, am=1, ch=False)
+    def __fitGuides(self):
+        spine_gud, spine_jnt = self.GUIDES['spines'], self.jointsMapping['spines']
+        chest_gud, chest_jnt = self.GUIDES['chest'], self.jointsMapping['chest']
+        neck_gud, neck_jnt = self.GUIDES['neck'], self.jointsMapping['neck']
+        head_gud, head_jnt = self.GUIDES['head'], self.jointsMapping['head']
 
-        pm.select(self.humanCage)
-        cmds.polySoftEdge(a=180, ch=0)
+        SkinCage.matchTransformArrays(spine_gud, spine_jnt, translationOnly=True)
+        SkinCage.matchTransformArrays(chest_gud, chest_jnt, translationOnly=True)
+        SkinCage.matchTransformArrays(neck_gud, neck_jnt + head_jnt, translationOnly=True)
+        SkinCage.matchTransformArrays(head_gud, [head_jnt[0] for x in range(3)], translationOnly=True)
+
+        for side in 'lr':
+            leg_gud, leg_jnt = self.GUIDES[side+'t_leg'], self.jointsMapping[side+'t_leg']
+            arm_gud, arm_jnt = self.GUIDES[side+'t_arm'], self.jointsMapping[side+'t_arm']
+            fingers_gud, fingers_jnt = self.GUIDES[side+'t_fingers'], self.jointsMapping[side+'t_fingers']
+            feet_gud, feet_jnt = self.GUIDES[side+'t_foot'], self.jointsMapping[side+'t_foot']
+            hand_gud = self.GUIDES[side+'t_hand']
+
+            SkinCage.matchTransformArrays(leg_gud[:2], leg_jnt[:2], translationOnly=False)
+            SkinCage.matchTransformArrays(leg_gud[-1], leg_jnt[-1], translationOnly=True)
+            SkinCage.matchTransformArrays(arm_gud, arm_jnt, translationOnly=False)
+            SkinCage.matchTransformArrays(hand_gud, [arm_jnt[2] for x in range(2)], translationOnly=False)
+            for finger_gud, finger_jnt in zip(fingers_gud, fingers_jnt):
+                SkinCage.matchTransformArrays(finger_gud, finger_jnt[1:], translationOnly=False)
+
+            for foot_gud, foot_jnt in zip(feet_gud, [leg_jnt[-1]]+feet_jnt):
+                SkinCage.matchTransformArrays(foot_gud, foot_jnt, translationOnly=True)
+            cmds.setAttr(feet_gud[0]+'.ty', 0)
+
+            # set hand guide on palm
+            cmds.delete(cmds.pointConstraint(fingers_jnt[2][0], fingers_jnt[3][0], hand_gud[1], mo=False))
+            cons = cmds.pointConstraint(arm_jnt[-1], hand_gud[1], hand_gud[0], mo=False)[0]
+            cmds.setAttr(cons+'.w0', 0.5)
+            cmds.setAttr(cons+'.w1', 0.5)
+            cmds.delete(cons)
+
         cmds.select(cl=True)
 
     def __createChestCage(self):
-        spine3_guide = pm.PyNode(self.GUIDES['spine'][-1])
+        spine3_guide = pm.PyNode(self.GUIDES['spines'][-1])
         chest_guide = pm.PyNode(self.GUIDES['chest'][0])
         lt_arm1_guide = pm.PyNode(self.GUIDES['lt_arm'][0])
         rt_arm1_guide = pm.PyNode(self.GUIDES['rt_arm'][0])
@@ -163,13 +245,13 @@ class SkinCage:
         # return None, None
 
     def __createSpineCage(self):
-        spine_guide = [pm.PyNode(n) for n in self.GUIDES['spine']]
+        spine_guide = [pm.PyNode(n) for n in self.GUIDES['spines']]
         spineCage = SkinCage.createPolygon(spine_guide, sub_edges=3)
 
         return spineCage
 
     def __createHipCage(self):
-        spine_guide = pm.PyNode(self.GUIDES['spine'][0])
+        spine_guide = pm.PyNode(self.GUIDES['spines'][0])
         lt_leg_guide = pm.PyNode(self.GUIDES['lt_leg'][0])
         rt_leg_guide = pm.PyNode(self.GUIDES['rt_leg'][0])
 
@@ -213,9 +295,9 @@ class SkinCage:
         cmds.polyNormal( lt_armCage.name(), normalMode=0, userNormalMode=0, ch=0)
 
         for arm in [lt_armCage, rt_armCage]:
-            SkinCage.insertEdgesLoop(arm.name() + '.e[37]', weight=0.9)
-            SkinCage.insertEdgesLoop(arm.name() + '.e[88]', weight=0.1)
-            SkinCage.insertEdgesLoop(arm.name() + '.e[101]', weight=0.9)
+            SkinCage.pInsertEdgesLoop(arm.name() + '.e[37]', weight=0.9)
+            SkinCage.pInsertEdgesLoop(arm.name() + '.e[88]', weight=0.1)
+            SkinCage.pInsertEdgesLoop(arm.name() + '.e[101]', weight=0.9)
             SkinCage.pDeleteEdgesLoop(arm.name() + '.e[46]')
 
         armCage = pm.polyUnite([lt_armCage, rt_armCage], ch=False)[0]
@@ -232,9 +314,9 @@ class SkinCage:
         cmds.polyNormal(lt_legCage.name(), normalMode=0, userNormalMode=0, ch=0)
 
         for leg in [lt_legCage, rt_legCage]:
-            SkinCage.insertEdgesLoop(leg.name() + '.e[4]', weight=0.9)
-            SkinCage.insertEdgesLoop(leg.name() + '.e[89]', weight=0.1)
-            SkinCage.insertEdgesLoop(leg.name() + '.e[99]', weight=0.9)
+            SkinCage.pInsertEdgesLoop(leg.name() + '.e[4]', weight=0.9)
+            SkinCage.pInsertEdgesLoop(leg.name() + '.e[89]', weight=0.1)
+            SkinCage.pInsertEdgesLoop(leg.name() + '.e[99]', weight=0.9)
             SkinCage.pDeleteEdgesLoop(leg.name() + '.e[34]')
 
         legCage = pm.polyUnite([lt_legCage, rt_legCage], ch=False)[0]
@@ -277,8 +359,8 @@ class SkinCage:
             if side == 'l':
                 cmds.polyNormal(footCage.name(), normalMode=0, userNormalMode=0, ch=0)
 
-            SkinCage.insertEdgesLoop(footCage.name() + '.e[16]', weight=0.9)
-            SkinCage.insertEdgesLoop(footCage.name() + '.e[6]', weight=0.1)
+            SkinCage.pInsertEdgesLoop(footCage.name() + '.e[16]', weight=0.9)
+            SkinCage.pInsertEdgesLoop(footCage.name() + '.e[6]', weight=0.1)
             SkinCage.pDeleteEdgesLoop(footCage.name() + '.e[7]')
 
             # toe
@@ -300,29 +382,31 @@ class SkinCage:
 
     def __createHands(self):
         allCages = []
-        for side in 'lr':
+        for side in 'l':
             arm_guide = pm.PyNode(self.GUIDES[side + 't_arm'][-1])
             hand_guide = [pm.PyNode(n) for n in self.GUIDES[side + 't_hand']]
             fingers_guide = [[pm.PyNode(f) for f in fng] for fng in self.GUIDES[side + 't_fingers']]
 
             # create palm cage
-            palmCage = SkinCage.createPolygon([arm_guide] + hand_guide, sub_edges=1)
+            palmCage0 = SkinCage.createPolygon([arm_guide, hand_guide[0]], sub_edges=1)
+            palmCage1 = SkinCage.createPolygon(hand_guide, sub_edges=1)
             if side == 'l':
-                cmds.polyNormal(palmCage.name(), normalMode=0, userNormalMode=0, ch=0)
-            SkinCage.pPolySplit(palmCage.name(), edges=[(23, 0.5), (24, 0.5)])
-            SkinCage.pPolySplit(palmCage.name(), edges=[(3, 0.5), (1, 0.5)])
-            SkinCage.pPolySplit(palmCage.name(), edges=[(7, 0.5), (5, 0.5)])
-            SkinCage.pPolySplit(palmCage.name(), edges=[(38, 0.5), (39, 0.5)])
-            pm.delete([palmCage.f[x] for x in (3, 4)])
+                cmds.polyNormal(palmCage0.name(), normalMode=0, userNormalMode=0, ch=0)
+                cmds.polyNormal(palmCage1.name(), normalMode=0, userNormalMode=0, ch=0)
+            # self.pInsertEdgesLoop(palmCage0.name() + '.e[9]', weight=0.8)
+            SkinCage.pPolySplit(palmCage0.name(), edges=[(15, 0.5)])
+            SkinCage.pPolySplit(palmCage0.name(), edges=[(6, 0.5)])
+            SkinCage.pPolySplit(palmCage0.name(), edges=[(2, 0.5)])
+            SkinCage.pPolySplit(palmCage0.name(), edges=[(23, 0.5)])
+
+            palmCage = pm.polyUnite([palmCage0, palmCage1], ch=False)[0]
+            for vtx in [(16,24), (17,31), (18,40), (19,32)]:
+                cmds.polyMergeVertex([palmCage.name()+'.vtx[{0}]'.format(x) for x in vtx], d=10.00, ch=False)
             allCages.append(palmCage)
 
             # create finger base
             hand_guide = [pm.PyNode(n) for n in self.GUIDES[side + 't_hand']]
             basePos = [ cv.getPosition(space='world') for cv in hand_guide[-1].getShape().cv ]
-            basePos.insert(3, SkinCage.createPosBetween(basePos[2], basePos[3]))
-            basePos.insert(5, SkinCage.createPosBetween(basePos[4], basePos[5]))
-            basePos.insert(9, SkinCage.createPosBetween(basePos[8], basePos[9]))
-            basePos.append(SkinCage.createPosBetween(basePos[0], basePos[-1]))
             midPos = [ SkinCage.createPosBetween(basePos[x], basePos[y]) for x, y in zip((3,4,5),(11,10,9))]
 
             # create fingers cage
@@ -343,7 +427,7 @@ class SkinCage:
                 fingerCages.append(fingerCage)
                 SkinCage.pPolyBevel(fingerCage.name()+'.e[10]', offset=0.05, loop=True)
                 SkinCage.pPolyBevel(fingerCage.name()+'.e[7]', offset=0.05, loop=True)
-                SkinCage.insertEdgesLoop(fingerCage.name()+'.e[31]', weight=0.1)
+                SkinCage.pInsertEdgesLoop(fingerCage.name()+'.e[31]', weight=0.1)
                 if side == 'l':
                     cmds.polyNormal(fingerCage.name(), normalMode=0, userNormalMode=0, ch=0)
             pm.delete(fingerBase)
@@ -353,7 +437,9 @@ class SkinCage:
             pos1 = [ cv.getPosition(space='world') for cv in arm_guide.getShape().cv ][0:3]
             pos2 = [ cv.getPosition(space='world') for cv in hand_guide[0].getShape().cv ][0:3]
             pos2.reverse()
-            finger0base = pm.curve(p=pos1+pos2, d=1)
+            finger0_pos = pos1 + pos2
+            finger0_pos.insert(0, finger0_pos.pop(-1))
+            finger0base = pm.curve(p=finger0_pos, d=1)
             pm.closeCurve(finger0base, ch=False, ps=1, rpo=1, bb=0.5, bki=0, p=0.1)
             finger0Cage = SkinCage.createPolygon([finger0base] + fingers_guide[0], sub_edges=1)
             SkinCage.pPolyBevel(finger0Cage.name() + '.e[10]', offset=0.05, loop=True)
@@ -476,7 +562,7 @@ class SkinCage:
         return mesh
 
     @staticmethod
-    def insertEdgesLoop(edge=None, weight=0.5):
+    def pInsertEdgesLoop(edge=None, weight=0.5):
         if edge:
             cmds.select(edge)
             cmds.SelectEdgeRingSp()
@@ -526,63 +612,71 @@ class SkinCage:
         cmds.polyMirrorFace(mesh, direction=0, mergeMode=1, ch=False)
 
     @staticmethod
-    def cCurveMirror(curve, LR=['lt','rt']):
+    def cCurveMirror(curves, LR=['lt_','rt_']):
+        print 'lets mirror curve :', curves
         L, R = LR
-        if L in curve:
-            L_cvs = cmds.ls(curve+'.cv[*]', fl=True)
-            R_cvs = cmds.ls(curve.replace(L,R)+'.cv[*]', fl=True)
-            for lcv, rcv in zip(L_cvs, R_cvs):
-                pos = cmds.pointPosition(lcv, world=True)
-                cmds.move(pos[0] * -1, pos[1], pos[2], rcv, ws=True, a=True)
-        elif R in curve:
-            R_cvs = cmds.ls(curve+'.cv[*]', fl=True)
-            L_cvs = cmds.ls(curve.replace(R,L)+'.cv[*]', fl=True)
-            for lcv, rcv in zip(L_cvs, R_cvs):
-                pos = cmds.pointPosition(rcv, world=True)
-                cmds.move(pos[0] * -1, pos[1], pos[2], lcv, ws=True, a=True)
-        else:
-            openCurve = cmds.getAttr(curve+'.f')
+        if type(curves) == str:
+            curves = [curves]
 
-            if openCurve == 0:
-                cvs = cmds.ls(curve+'.cv[*]', fl=True)
-                num = len(cvs)
-                mid = num / 2
-
-                left = [x for x in range(mid + 1, num)]
-                right = [x for x in range(mid)]
-                right.reverse()
-
-                # center
-                cv = curve + '.cv[{}]'.format(mid)
-                pos = cmds.pointPosition(cv, world=True)
-                cmds.move(0, pos[1], pos[2], cv, ws=True, a=True)
-
-                for l, r in zip(left, right):
-                    cv1, cv2 = curve + '.cv[{}]'.format(l), curve + '.cv[{}]'.format(r)
-                    pos = cmds.pointPosition(cv1, world=True)
-                    cmds.move(pos[0]*-1, pos[1], pos[2], cv2, ws=True, a=True)
+        for curve in curves:
+            if L in curve:
+                L_cvs = cmds.ls(curve+'.cv[*]', fl=True)
+                R_cvs = cmds.ls(curve.replace(L,R)+'.cv[*]', fl=True)
+                for lcv, rcv in zip(L_cvs, R_cvs):
+                    pos = cmds.pointPosition(lcv, world=True)
+                    cmds.move(pos[0] * -1, pos[1], pos[2], rcv, ws=True, a=True)
+            elif R in curve:
+                print curve, '::',
+                R_cvs = cmds.ls(curve+'.cv[*]', fl=True)
+                L_cvs = cmds.ls(curve.replace(R,L)+'.cv[*]', fl=True)
+                for lcv, rcv in zip(L_cvs, R_cvs):
+                    pos = cmds.pointPosition(rcv, world=True)
+                    cmds.move(pos[0] * -1, pos[1], pos[2], lcv, ws=True, a=True)
 
             else:
-                cvs = cmds.ls(curve+'.cv[*]', fl=True)
-                num = len(cvs)
-                mid = num / 2
+                openCurve = cmds.getAttr(curve+'.f')
+                print curve, ':', openCurve
 
-                center = (0, mid)
-                left = [x for x in range(1, mid)]
-                right = [x for x in range(mid + 1, num)]
-                right.reverse()
+                if openCurve == 0:
+                    cvs = cmds.ls(curve+'.cv[*]', fl=True)
+                    num = len(cvs)
+                    mid = num / 2
 
-                for i in center:
-                    cv = curve+'.cv[{}]'.format(i)
-                    pos = cmds.pointPosition( cv, world=True )
-                    cmds.move(0, pos[1], pos[2], cv, ws=True, a=True )
+                    left = [x for x in range(mid + 1, num)]
+                    right = [x for x in range(mid)]
+                    right.reverse()
 
-                for l, r in zip(left, right):
-                    cv1, cv2 = curve + '.cv[{}]'.format(l), curve + '.cv[{}]'.format(r)
-                    pos = cmds.pointPosition(cv1, world=True)
-                    cmds.move(pos[0]*-1, pos[1], pos[2], cv2, ws=True, a=True)
+                    # center
+                    cv = curve + '.cv[{}]'.format(mid)
+                    pos = cmds.pointPosition(cv, world=True)
+                    cmds.move(0, pos[1], pos[2], cv, ws=True, a=True)
 
-                cmds.select(cl=True)
+                    for l, r in zip(left, right):
+                        cv1, cv2 = curve + '.cv[{}]'.format(l), curve + '.cv[{}]'.format(r)
+                        pos = cmds.pointPosition(cv1, world=True)
+                        cmds.move(pos[0]*-1, pos[1], pos[2], cv2, ws=True, a=True)
+
+                else:
+                    cvs = cmds.ls(curve+'.cv[*]', fl=True)
+                    num = len(cvs)
+                    mid = num / 2
+
+                    center = (0, mid)
+                    left = [x for x in range(1, mid)]
+                    right = [x for x in range(mid + 1, num)]
+                    right.reverse()
+
+                    for i in center:
+                        cv = curve+'.cv[{}]'.format(i)
+                        pos = cmds.pointPosition( cv, world=True )
+                        cmds.move(0, pos[1], pos[2], cv, ws=True, a=True )
+
+                    for l, r in zip(left, right):
+                        cv1, cv2 = curve + '.cv[{}]'.format(l), curve + '.cv[{}]'.format(r)
+                        pos = cmds.pointPosition(cv1, world=True)
+                        cmds.move(pos[0]*-1, pos[1], pos[2], cv2, ws=True, a=True)
+
+                    cmds.select(cl=True)
 
     @staticmethod
     def deleteHistoryUsingDuplicate(mesh):
@@ -635,12 +729,28 @@ class SkinCage:
 
         return positionResult
 
+    @staticmethod
+    def matchTransformArrays(nodes, targets, translationOnly=False):
+        if type(nodes) == str:
+            nodes = [nodes]
+        if type(targets) == str:
+            targets = [targets]
+
+        for n, t in zip(nodes, targets):
+            cmds.select(n, t)
+            if translationOnly:
+                mel.eval('MatchTranslation;')
+            else:
+                mel.eval('MatchTransform;')
+
 def run():
+    # cmds.file("D:/WORK/Learn/skinCage.0004.ma", type="mayaAscii", o=True, f=True)
     if cmds.objExists('Human_Cage'):
         cmds.delete('Human_Cage')
     scg = SkinCage()
+    scg.generateGuides()
     scg.createHumanCage()
-    # scg.createPolygonCap('lt_foot_1_guide')
+    # scg.mirrorGuide()
 
 if __name__ == '__main__':
     run()
